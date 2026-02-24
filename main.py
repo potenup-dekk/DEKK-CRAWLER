@@ -1,8 +1,7 @@
-import os
 import time
 from datetime import datetime
 from core.state_manager import StateManager
-from core.delivery import send_to_sqs, send_to_batch_api
+from core.delivery import get_delivery
 from crawlers.musinsa import MusinsaCrawler
 
 def main():
@@ -34,15 +33,9 @@ def main():
                 print(f"❌ {platform} 스냅({snap_id}) 처리 에러: {e}")
 
     if all_processed_dtos:
-        delivery_mode = os.getenv('DELIVERY_MODE', 'SQS').upper()
-        print(f"\n📦 데이터 수집 완료. [{delivery_mode}] 방식으로 전송을 시작합니다...")
-        
-        if delivery_mode == 'BATCH':
-            send_to_batch_api(all_processed_dtos)
-        elif delivery_mode == 'SQS':
-            send_to_sqs(all_processed_dtos)
-        else:
-            print(f"❌ 알 수 없는 DELIVERY_MODE: {delivery_mode}")
+        delivery = get_delivery()
+        print(f"\n📦 데이터 수집 완료. [{delivery.__class__.__name__}] 방식으로 전송을 시작합니다...")
+        delivery.send(all_processed_dtos)
 
 if __name__ == "__main__":
     main()
