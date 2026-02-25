@@ -1,2 +1,2 @@
-# 매시간 0분마다 main.py 실행 (도커 로그로 출력되게 설정)
-0 * * * * root /usr/local/bin/python /app/main.py > /proc/1/fd/1 2>/proc/1/fd/2
+# 10분마다 main.py 실행 (도커 로그로 출력되게 설정)
+*/10 * * * * root /usr/local/bin/python /app/main.py > /proc/1/fd/1 2>/proc/1/fd/2
