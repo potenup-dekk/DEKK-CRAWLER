@@ -5,7 +5,7 @@ import requests
 import boto3
 from io import BytesIO
 
-S3_BUCKET = os.getenv('S3_BUCKET_NAME', 'my-dekk-bucket')
+S3_BUCKET = os.getenv('S3_BUCKET_NAME')
 
 s3_client = boto3.client(
     's3',
