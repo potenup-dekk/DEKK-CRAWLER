@@ -16,24 +16,47 @@ s3_client = boto3.client(
 
 class S3Uploader:
     @staticmethod
-    def upload_image_from_url(image_url, platform, date_str):
+    def upload_snap_image(image_url, platform, date_str, snap_id):
+        """스냅 대표 이미지 - snap_id 기반 키로 저장 (1:1 추적 용이)"""
         if not image_url: return None
         try:
             response = requests.get(image_url, stream=True, timeout=10)
             response.raise_for_status()
-            
-            filename = image_url.split('/')[-1].split('?')[0] or f"{int(time.time())}.jpg"
-            s3_key = f"cards/{platform}/{date_str}/{filename}"
-            
+
+            ext = image_url.split('.')[-1].split('?')[0] or 'jpg'
+            s3_key = f"cards/{platform}/{date_str}/{snap_id}.{ext}"
+
             s3_client.upload_fileobj(
-                BytesIO(response.content), 
-                S3_BUCKET, 
+                BytesIO(response.content),
+                S3_BUCKET,
                 s3_key,
-                ExtraArgs={'ContentType': 'image/jpeg'} 
+                ExtraArgs={'ContentType': 'image/jpeg'}
             )
             return s3_key
         except Exception as e:
-            print(f"❌ [S3 이미지 업로드 실패] {image_url}: {e}")
+            print(f"❌ [S3 스냅 이미지 업로드 실패] {snap_id}: {e}")
+            return None
+
+    @staticmethod
+    def upload_product_image(image_url, platform, date_str):
+        """상품 이미지 - CDN filename 기반 키로 저장 (동일 상품 중복 방지)"""
+        if not image_url: return None
+        try:
+            response = requests.get(image_url, stream=True, timeout=10)
+            response.raise_for_status()
+
+            filename = image_url.split('/')[-1].split('?')[0] or f"{int(time.time())}.jpg"
+            s3_key = f"cards/{platform}/{date_str}/{filename}"
+
+            s3_client.upload_fileobj(
+                BytesIO(response.content),
+                S3_BUCKET,
+                s3_key,
+                ExtraArgs={'ContentType': 'image/jpeg'}
+            )
+            return s3_key
+        except Exception as e:
+            print(f"❌ [S3 상품 이미지 업로드 실패] {image_url}: {e}")
             return None
 
     @staticmethod

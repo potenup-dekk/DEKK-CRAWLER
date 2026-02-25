@@ -84,13 +84,13 @@ class MusinsaCrawler(BaseCrawler):
 
         medias = raw_snap_data.get('medias', [])
         original_image_url = medias[0].get('path') if medias else ""
-        s3_image_key = S3Uploader.upload_image_from_url(original_image_url, self.platform_name, today_str)
+        s3_image_key = S3Uploader.upload_snap_image(original_image_url, self.platform_name, today_str, snap_id)
 
         flat_tags = ",".join([t.get('name', '') for t in raw_snap_data.get('tags', [])])
-        
+
         products_dto = []
         for p in raw_snap_data.get('goods_detail_list', []):
-            p_s3_key = S3Uploader.upload_image_from_url(p.get('imageUrl'), self.platform_name, today_str)
+            p_s3_key = S3Uploader.upload_product_image(p.get('imageUrl'), self.platform_name, today_str)
             products_dto.append({
                 "origin_id": p.get('goodsNo'),
                 "name": p.get('goodsName'),
