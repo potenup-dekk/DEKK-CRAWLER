@@ -15,7 +15,7 @@
      │
      └──▶ DTO 생성
                │
-               └── DELIVERY_MODE=BATCH ──▶ [Batch API (HTTP)] ──▶ Queue 테이블 적재
+               └───▶ [Batch API (HTTP)] ──▶ Queue 테이블 적재
 ```
 
 ## S3 데이터 레이아웃
@@ -35,14 +35,14 @@
 ```json
 // Example
 {
-  "origin_id": "12345678",
-  "card_image_url": "cards/MUSINSA/2025/01/01/image.jpg",
-  "tags": "오버핏,캐주얼,데님",
-  "is_active": true,
+  "origin_id": "12345678", // 고유 키 및 딥링크용
+  "card_image_url": "cards/MUSINSA/2025/01/01/image.jpg", // S3 상대경로
+  "tags": "오버핏,캐주얼,데님", // 단일 문자열
+  "is_active": true, // true인 것만 화면에 노출
   "platform": "MUSINSA",
-  "height": 180,
-  "weight": 65,
-  "created_at": "2026-02-25T17:28:25+09:00",
+  "height": 180.0, // 체형 필터링용 (없으면 null)
+  "weight": 65.0,
+  "created_at": "2026-02-25T17:28:25+09:00", // 크롤링 스냅 생성일자
   "products": []
 }
 ```
@@ -52,13 +52,13 @@
 ```json
 // Example
 {
-  "origin_id": 987654,
-  "name": "오버사이즈 데님 재킷",
-  "price": 89000,
-  "product_image_url": "cards/MUSINSA/2025/01/01/jacket.jpg",
-  "product_url": "https://www.musinsa.com/goods/987654",
-  "is_similar": false,
-  "option": null
+  "origin_id": 987654, // 상품 고유번호
+  "name": "오버사이즈 데님 재킷", // 상품명
+  "price": 89000, // 가격
+  "product_image_url": "cards/MUSINSA/2025/01/01/jacket.jpg", // S3 상대 경로
+  "product_url": "https://www.musinsa.com/goods/987654", // 실제 구매 외부 링크
+  "is_similar": false, // 원본 상품 여부 (거의 false)
+  "option": null // 옵션 유무 (현 플랫폼의 경우 null)
 }
 ```
 
