@@ -2,7 +2,7 @@ import logging
 import os
 
 # 로그 파일이 저장될 디렉토리 (없으면 자동 생성)
-LOG_DIR = '/app/data'
+LOG_DIR = 'data' 
 os.makedirs(LOG_DIR, exist_ok=True)
 
 def _setup_logger():
