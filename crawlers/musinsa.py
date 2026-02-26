@@ -1,17 +1,19 @@
 import time
 import json
 import requests
+
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-from core.s3_uploader import S3Uploader
 from .base import BaseCrawler
+from core.logger import logger
 
 class MusinsaCrawler(BaseCrawler):
     platform_name = "MUSINSA"
     
     def fetch_new_snaps(self, last_snap_id):
         """Playwright로 스크롤하며 last_snap_id 이전까지의 신규 스냅 ID만 추출 (Delta Crawling)"""
-        print(f"🔍 [{self.platform_name}] 신규 스냅 탐색 시작 (마지막 ID: {last_snap_id})")
+        logger.info(f"🔍 [{self.platform_name}] 신규 스냅 탐색 시작 (마지막 ID: {last_snap_id})")
+        
         new_ids = []
         
         with sync_playwright() as p:
@@ -56,8 +58,7 @@ class MusinsaCrawler(BaseCrawler):
         except Exception:
             return []
 
-    def process_and_upload(self, snap_id, today_str):
-        """HTML에서 원본 데이터를 파싱하고, 상품 히든 API를 찌른 후 S3 및 DTO 생성"""
+    def process_and_upload(self, snap_id):
         url = f"https://www.musinsa.com/snap/{snap_id}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         
@@ -68,6 +69,7 @@ class MusinsaCrawler(BaseCrawler):
 
         json_data = json.loads(script_tag.string)
         queries = json_data.get('props', {}).get('pageProps', {}).get('dehydratedState', {}).get('queries', [])
+        
         raw_snap_data = {}
         for q in queries:
             if 'contentAPI.getApi2SnapSnapsByIdV1' in q.get('queryKey', []):
@@ -80,35 +82,10 @@ class MusinsaCrawler(BaseCrawler):
         goods_nos = [str(g.get('goodsNo')) for g in goods_list_raw if g.get('goodsNo')]
         raw_snap_data['goods_detail_list'] = self._fetch_goods_batch(goods_nos)
 
-        S3Uploader.upload_raw_json(raw_snap_data, self.platform_name, snap_id, today_str)
-
-        medias = raw_snap_data.get('medias', [])
-        original_image_url = medias[0].get('path') if medias else ""
-        s3_image_key = S3Uploader.upload_snap_image(original_image_url, self.platform_name, today_str, snap_id)
-
-        flat_tags = ",".join([t.get('name', '') for t in raw_snap_data.get('tags', [])])
-
-        products_dto = []
-        for p in raw_snap_data.get('goods_detail_list', []):
-            p_s3_key = S3Uploader.upload_product_image(p.get('imageUrl'), self.platform_name, today_str)
-            products_dto.append({
-                "origin_id": p.get('goodsNo'),
-                "name": p.get('goodsName'),
-                "price": p.get('normalPrice'),
-                "product_image_url": p_s3_key,
-                "product_url": p.get('linkUrl'),
-                "is_similar": False,
-                "option": None
-            })
-
-        final_dto = {
-            "origin_id": snap_id,
-            "card_image_url": s3_image_key,
-            "tags": flat_tags,
-            "is_active": True,
+        payload = {
             "platform": self.platform_name,
-            "height": raw_snap_data.get('model', {}).get('height'),
-            "weight": raw_snap_data.get('model', {}).get('weight'),
-            "products": products_dto
+            "origin_id": str(snap_id),
+            "raw_data": json.dumps(raw_snap_data, ensure_ascii=False) 
         }
-        return final_dto
+
+        return payload
