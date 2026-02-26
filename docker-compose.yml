@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  integrated-crawler:
+    build: .
+    container_name: integrated-crawler-worker
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data

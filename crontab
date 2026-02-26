@@ -1,0 +1,2 @@
+# 10분마다 실행 (파일은 파이썬이 알아서 쓰고, 화면 출력은 도커 로그로 쏴줌)
+*/10 * * * * cd /app && /usr/local/bin/python main.py > /proc/1/fd/1 2>/proc/1/fd/2
