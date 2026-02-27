@@ -1,8 +1,12 @@
+import os
 import time
-from datetime import datetime
+
 from dotenv import load_dotenv
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from core.config import STATE_FILE_PATH 
 from core.state_manager import StateManager
+from core.logger import logger
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.delivery import get_delivery
 from crawlers.musinsa import MusinsaCrawler
 from core.logger import logger
@@ -18,7 +22,8 @@ def seed_initial_data():
     crawled_at = datetime.now().isoformat()
     crawler = MusinsaCrawler()
     delivery = get_delivery()
-    state_manager = StateManager('/app/data/crawler_state.json')
+    
+    state_manager = StateManager(STATE_FILE_PATH)
 
     platform = crawler.platform_name
 
@@ -45,7 +50,7 @@ def seed_initial_data():
                         batch_raw_data_list.append(raw_dict)
                         successful_snap_ids.append(snap_id)
 
-                    if completed_count % 50 == 0 or completed_count == total_snaps:
+                    if completed_count % 100 == 0 or completed_count == total_snaps:
                         logger.info(f"병렬 수집 진행 중... ({completed_count}/{total_snaps})")
 
                 except Exception as e:
