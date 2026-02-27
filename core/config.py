@@ -11,3 +11,8 @@ STATE_FILE_PATH = os.path.join(DATA_DIR, 'crawler_state.json')
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
+
+# 크롤링 설정
+MAX_WORKERS = 5
+CHUNK_SIZE = 20
+INITIAL_MAX_SCROLLS = 40

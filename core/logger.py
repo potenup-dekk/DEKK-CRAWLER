@@ -4,7 +4,7 @@ import logging
 from core.config import LOG_DIR
 from logging.handlers import TimedRotatingFileHandler
 
-def setup_logger():
+def _setup_logger():
     logger = logging.getLogger("DEKK_Crawler")
     
     if logger.handlers:
@@ -44,4 +44,4 @@ def setup_logger():
     
     return logger
 
-logger = setup_logger()
+logger = _setup_logger()
