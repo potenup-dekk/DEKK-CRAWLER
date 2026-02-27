@@ -2,7 +2,8 @@
 .env
 
 # 런타임 데이터 (로그, 상태 파일)
-data/
+data
+logs
 
 # Python
 venv/
@@ -12,5 +13,4 @@ __pycache__/
 
 # macOS
 .DS_Store
-
 docs
