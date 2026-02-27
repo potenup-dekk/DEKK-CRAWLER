@@ -1,1 +1,16 @@
+# 환경 설정
 .env
+
+# 런타임 데이터 (로그, 상태 파일)
+data/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+docs
