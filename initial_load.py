@@ -3,19 +3,14 @@ import time
 
 from dotenv import load_dotenv
 from datetime import datetime
-from core.config import STATE_FILE_PATH 
+from core.config import STATE_FILE_PATH, CHUNK_SIZE, MAX_WORKERS, INITIAL_MAX_SCROLLS
 from core.state_manager import StateManager
 from core.logger import logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.delivery import get_delivery
 from crawlers.musinsa import MusinsaCrawler
-from core.logger import logger
 
 load_dotenv()
-
-INITIAL_MAX_SCROLLS = 40
-CHUNK_SIZE = 20
-MAX_WORKERS = 5
 
 def seed_initial_data():
     logger.info("[초기 세팅] 대규모 데이터 수집(병렬) 시작!")
