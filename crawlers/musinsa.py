@@ -1,16 +1,28 @@
-import time
 import json
-import requests
 import random
+import time
+from urllib.parse import urlparse
 
-from curl_cffi import requests as curl_requests
+import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests as curl_requests
 from playwright.sync_api import sync_playwright
-from .base import BaseCrawler
+
 from core.logger import logger
+from core.s3_uploader import S3Uploader
+
+from .base import BaseCrawler
+
+
+def _get_filename(url: str) -> str:
+    name = urlparse(url).path.split('/')[-1]
+    return name if name else 'image.jpg'
 
 class MusinsaCrawler(BaseCrawler):
     platform_name = "MUSINSA"
+
+    def __init__(self):
+        self.s3 = S3Uploader()
     
     def fetch_new_snaps(self, last_snap_id, max_scrolls=5):
         """Playwright로 스크롤하며 last_snap_id 이전까지의 신규 스냅 ID만 추출 (Delta Crawling)"""
@@ -93,7 +105,7 @@ class MusinsaCrawler(BaseCrawler):
     def process_and_upload(self, snap_id):
         url = f"https://www.musinsa.com/snap/{snap_id}"
         
-        # 💡 각 스레드 휴식은 방화벽 회피를 위해 꼭 유지해 주세요
+        # 각 스레드 휴식 - 방화벽 회피를 위해 꼭 유지
         time.sleep(random.uniform(1.5, 3.5)) 
 
         try:
@@ -127,4 +139,24 @@ class MusinsaCrawler(BaseCrawler):
         goods_list_raw = raw_snap_data.get('goods', [])
         goods_nos = [str(g.get('goodsNo')) for g in goods_list_raw if g.get('goodsNo')]
         raw_snap_data['goods_detail_list'] = self._fetch_goods_batch(goods_nos)
+
+        self._upload_images_to_s3(snap_id, raw_snap_data)
         return raw_snap_data
+
+    def _upload_images_to_s3(self, snap_id: str, raw_snap_data: dict):
+        for media in raw_snap_data.get('medias', []):
+            if media.get('type') == 'IMAGE' and media.get('path'):
+                filename = _get_filename(media['path'])
+                s3_key = f"musinsa/snaps/{snap_id}/{filename}"
+                s3_url = self.s3.upload_from_url(media['path'], s3_key)
+                if s3_url:
+                    media['path'] = s3_url
+
+        for goods in raw_snap_data.get('goods_detail_list', []):
+            if goods.get('imageUrl'):
+                goods_no = goods.get('goodsNo', 'unknown')
+                filename = _get_filename(goods['imageUrl'])
+                s3_key = f"musinsa/goods/{goods_no}/{filename}"
+                s3_url = self.s3.upload_from_url(goods['imageUrl'], s3_key)
+                if s3_url:
+                    goods['imageUrl'] = s3_url
