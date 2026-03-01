@@ -1,8 +1,9 @@
-import os
 import logging
+import os
+from logging.handlers import TimedRotatingFileHandler
 
 from core.config import LOG_DIR
-from logging.handlers import TimedRotatingFileHandler
+
 
 def _setup_logger():
     logger = logging.getLogger("DEKK_Crawler")
@@ -20,7 +21,7 @@ def _setup_logger():
         filename=os.path.join(LOG_DIR, "crawler.log"),
         when="midnight",
         interval=1,
-        backupCount=30,   
+        backupCount=30, 
         encoding="utf-8"
     )
     file_handler.suffix = "%Y-%m-%d"

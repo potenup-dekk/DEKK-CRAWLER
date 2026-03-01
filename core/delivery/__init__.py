@@ -1,6 +1,8 @@
 import os
+
 from .base import BaseDelivery
 from .batch import BatchDelivery
+
 
 def get_delivery() -> BaseDelivery:
     mode = os.getenv('DELIVERY_MODE', 'BATCH').upper()

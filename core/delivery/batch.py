@@ -1,9 +1,12 @@
-import os
-import requests
 import json
+import os
+
+import requests
+
+from core.logger import logger
 
 from .base import BaseDelivery
-from core.logger import logger
+
 
 class BatchDelivery(BaseDelivery):
     def __init__(self):
@@ -15,10 +18,10 @@ class BatchDelivery(BaseDelivery):
             res = requests.post(url, json={"platform": platform}, timeout=10)
             res.raise_for_status()
             batch_id = res.json().get('data', {}).get('batchId')
-            logger.info(f"[배치 생성 완료] Platform: {platform}, Batch ID: {batch_id}")
+            logger.info("[배치 생성 완료] Platform: %s, Batch ID: %s", platform, batch_id)
             return batch_id
         except Exception as e:
-            logger.error(f"[배치 생성 실패] {e}", exc_info=True)
+            logger.error("[배치 생성 실패] %s", e, exc_info=True)
             raise e
     
     def send_raw_data(self, batch_id: int, chunk_list: list, crawled_at: str):
@@ -30,9 +33,9 @@ class BatchDelivery(BaseDelivery):
         try:
             res = requests.post(url, json=payload, timeout=30)
             res.raise_for_status()
-            logger.info(f"[청크 전송 완료] Batch ID: {batch_id}, {len(chunk_list)}개 데이터 전송")
+            logger.info("[청크 전송 완료] Batch ID: %s, %s개 데이터 전송", batch_id, len(chunk_list))
         except Exception as e:
-            logger.error(f"[청크 전송 실패] Batch ID: {batch_id}, Error: {e}", exc_info=True)
+            logger.error("[청크 전송 실패] Batch ID: %s, Error: %s", batch_id, e, exc_info=True)
             raise e
         
     def complete_batch(self, batch_id: int, total_count: int, completed_at: str, error_message: str = None):
@@ -46,8 +49,9 @@ class BatchDelivery(BaseDelivery):
             res = requests.post(url, json=payload, timeout=10)
             res.raise_for_status()
             if error_message:
-                logger.warning(f"[배치 종료 (에러포함)] Batch ID: {batch_id}, Total: {total_count}")
+                logger.warning("[배치 종료 (에러포함)] Batch ID: %s, Total: %s", batch_id, total_count)
             else:
-                logger.info(f"[배치 종료 (성공)] Batch ID: {batch_id}, Total: {total_count}개 수집 완료!")
+                logger.info("[배치 종료 (성공)] Batch ID: %s, Total: %s개 수집 완료!", batch_id, total_count)
         except Exception as e:
-            logger.error(f"[배치 종료 통보 실패] Batch ID: {batch_id}, Error: {e}", exc_info=True)
+            logger.error("[배치 종료 통보 실패] Batch ID: %s, Error: %s", batch_id, e, exc_info=True)
+            
