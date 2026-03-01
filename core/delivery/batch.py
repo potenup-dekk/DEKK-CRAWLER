@@ -54,3 +54,4 @@ class BatchDelivery(BaseDelivery):
                 logger.info("[배치 종료 (성공)] Batch ID: %s, Total: %s개 수집 완료!", batch_id, total_count)
         except Exception as e:
             logger.error("[배치 종료 통보 실패] Batch ID: %s, Error: %s", batch_id, e, exc_info=True)
+            
