@@ -11,8 +11,8 @@ from core.logger import logger
 
 class S3Uploader:
     def __init__(self):
-        self.bucket = os.getenv('S3_BUCKET_NAME', 'musinsa-crawler-bucket')
-        self.region = os.getenv('AWS_REGION', 'ap-northeast-2')
+        self.bucket = os.getenv('S3_BUCKET_NAME')
+        self.region = os.getenv('AWS_REGION')
         self._client = boto3.client('s3', region_name=self.region)
 
     def upload_from_url(self, image_url: str, s3_key: str, max_retries=3) -> str | None:
