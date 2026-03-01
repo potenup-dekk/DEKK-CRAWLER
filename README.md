@@ -38,6 +38,7 @@ DEKK-CRAWLER/
 ├── core/
 │   ├── state_manager.py       # Delta Crawling 상태(last_snap_id) 관리
 │   ├── logger.py              # 파일 + 콘솔 로거
+│   ├── s3_uploader.py         # S3 파일 업로드
 │   └── delivery/
 │       ├── base.py            # BaseDelivery 추상 클래스
 │       ├── batch.py           # BatchDelivery - HTTP POST 3-step 전송
@@ -111,7 +112,13 @@ Docker volume(`./data:/app/data`)으로 마운트되어 컨테이너 재시작 �
 }
 ```
 
-`rawData` 배열 내 각 항목은 무신사 스냅 원본 JSON에 `goods_detail_list` 필드가 추가된 구조입니다.
+`rawData` 배열 내 각 항목은 무신사 스냅 원본 JSON에 아래 필드가 추가된 구조입니다.
+
+| 추가 필드 | 위치 | 설명 |
+| --- | --- | --- |
+| `goods_detail_list` | 최상위 | 태그된 상품 상세 정보 리스트 |
+| `medias[].s3Key` | medias 배열 각 항목 | 스냅 이미지 S3 키 (업로드 실패 시 `null`) |
+| `goods_detail_list[].s3ImageKey` | goods_detail_list 배열 각 항목 | 상품 이미지 S3 키 (업로드 실패 시 `null`) |
 
 ### 3. 수집 완료 통보 `POST /batches/{batchId}/complete`
 
@@ -131,8 +138,8 @@ Docker volume(`./data:/app/data`)으로 마운트되어 컨테이너 재시작 �
 
 | 파일                    | 내용                                     |
 | ----------------------- | ---------------------------------------- |
-| `/app/data/crawler.log` | INFO 이상 전체 로그                      |
-| `/app/data/error.log`   | ERROR 이상만                             |
+| `/app/logs/crawler.log` | INFO 이상 전체 로그                      |
+| `/app/logs/error.log`   | ERROR 이상만                             |
 | 콘솔 (stdout)           | INFO 이상 전체 (Docker 로그로 확인 가능) |
 
 ---
@@ -147,6 +154,12 @@ BATCH_API_URL=http://your-spring-boot-server/api
 
 # Delivery 모드 (현재 BATCH만 지원)
 DELIVERY_MODE=BATCH
+
+# AWS S3 (크롤링한 이미지 저장)
+# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY는 EC2/ECS IAM Role 사용 시 불필요
+# 로컬 테스트 시에만 직접 설정
+AWS_REGION=ap-northeast-2
+S3_BUCKET_NAME=your-bucket-name
 ```
 
 ---
@@ -183,13 +196,13 @@ BATCH_API_URL=http://... DELIVERY_MODE=BATCH python main.py
 
 ## 의존성
 
-| 패키지           | 용도                                               |
-| ---------------- | -------------------------------------------------- |
-| `playwright`     | 무신사 스냅 목록 페이지 스크롤 (Headless Chromium) |
+| 패키지           | 용도                                                    |
+| ---------------- | ------------------------------------------------------- |
+| `playwright`     | 무신사 스냅 목록 페이지 스크롤 (Headless Chromium)      |
 | `curl_cffi`      | 스냅 상세 페이지 및 상품 API 호출 (TLS 핑거프린팅 우회) |
-| `beautifulsoup4` | `__NEXT_DATA__` 스크립트 태그 파싱                 |
-| `requests`       | Batch API HTTP 전송                                |
-| `boto3`          | (미사용 예정, 향후 S3 연동 확장 시 활용)           |
+| `beautifulsoup4` | `__NEXT_DATA__` 스크립트 태그 파싱                      |
+| `requests`       | Batch API HTTP 전송                                     |
+| `boto3`          | 크롤링한 이미지 S3 업로드                               |
 
 ---
 
