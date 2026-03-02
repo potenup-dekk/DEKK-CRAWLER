@@ -1,10 +1,12 @@
 import os
 import time
+from io import BytesIO
 
 import boto3
 import botocore
 import requests
 from curl_cffi import requests as curl_requests
+from PIL import Image
 
 from core.logger import logger
 
@@ -20,19 +22,26 @@ class S3Uploader:
         if not image_url or not self.bucket:
             return None
 
-        if self._exists(s3_key):
-            logger.warning(f"[S3 스킵] 이미 존재하는 파일입니다: {s3_key}")
-            return s3_key
+        base_key = s3_key.rsplit('.', 1)[0]
+        webp_s3_key = f"{base_key}.webp"
+        
+        if self._exists(webp_s3_key):
+            logger.warning(f"[S3 스킵] 이미 존재하는 파일입니다: {webp_s3_key}")
+            return webp_s3_key
 
         if image_url.startswith('//'):
             image_url = 'https:' + image_url
 
-        content = self._download(image_url, max_retries)
-        if content is None:
-            logger.error(f"[S3 업로드 최종 실패] {max_retries}회 재시도 초과: {s3_key}")
+        raw_content = self._download(image_url, max_retries)
+        if raw_content is None:
+            logger.error(f"[S3 업로드 최종 실패] {max_retries}회 재시도 초과: {webp_s3_key}")
             return None
 
-        return self._put(s3_key, content)
+        resized_content = self._resize(raw_content)
+        if resized_content is None:
+            return None
+        
+        return self._put(webp_s3_key, resized_content)
 
     def _exists(self, s3_key: str) -> bool:
         """S3에 이미 존재하는 파일인지 확인."""
@@ -75,6 +84,25 @@ class S3Uploader:
             logger.error(f"우회 시도를 실패했습니다: {e}")
         return None
 
+    def _resize(self, content: bytes) -> bytes | None:
+        """Pillow를 이용해 해상도를 350x525로 줄이고 WebP로 압축/변환."""
+        try:
+            img = Image.open(BytesIO(content))
+            
+            max_size = (450, 675)
+            img.thumbnail(max_size)
+            
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+                
+            output_buffer = BytesIO()
+            img.save(output_buffer, format="WEBP", quality=80)
+            
+            return output_buffer.getvalue()
+        except Exception as e:
+            logger.error(f"[이미지 리사이징 에러]: {e}")
+            return None
+        
     def _put(self, s3_key: str, content: bytes) -> str | None:
         """S3에 파일 업로드."""
         try:
@@ -82,7 +110,7 @@ class S3Uploader:
                 Bucket=self.bucket,
                 Key=s3_key,
                 Body=content,
-                ContentType='image/jpeg',
+                ContentType='image/webp',
             )
             return s3_key
         except Exception as e:
