@@ -139,12 +139,24 @@ class MusinsaCrawler(BaseCrawler):
             return []
 
     def _upload_images_to_s3(self, snap_id: str, raw_snap_data: dict):
+        SNAP_TARGET_SIZE = (450, 675)
         for media in raw_snap_data.get('medias', []):
             if media.get('type') == 'IMAGE' and media.get('path'):
-                s3_key = f"musinsa/snaps/{snap_id}/{_get_filename(media['path'])}"
-                media['s3Key'] = self.s3.upload_from_url(media['path'], s3_key)
+                original_url = media['path']
+                s3_key = f"musinsa/snaps/{snap_id}/{_get_filename(original_url)}"
+                s3_url = self.s3.upload_from_url(original_url, s3_key, target_size=SNAP_TARGET_SIZE)
+                
+                media['originUrl'] = original_url
+                media['imageUrl'] = s3_url if s3_url else None
+                media['isUploaded'] = bool(s3_url)
 
+        GOODS_TARGET_SIZE = (100, 100)
         for goods in raw_snap_data.get('goods_detail_list', []):
             if goods.get('imageUrl'):
-                s3_key = f"musinsa/goods/{goods.get('goodsNo', 'unknown')}/{_get_filename(goods['imageUrl'])}"
-                goods['s3ImageKey'] = self.s3.upload_from_url(goods['imageUrl'], s3_key)
+                original_url = goods['imageUrl']
+                s3_key = f"musinsa/goods/{goods.get('goodsNo', 'unknown')}/{_get_filename(original_url)}"
+                s3_url = self.s3.upload_from_url(original_url, s3_key, target_size=GOODS_TARGET_SIZE)
+                
+                goods['originUrl'] = original_url
+                goods['imageUrl'] = s3_url if s3_url else None
+                goods['isUploaded'] = bool(s3_url)

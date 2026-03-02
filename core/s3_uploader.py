@@ -17,7 +17,7 @@ class S3Uploader:
         self.region = os.getenv('AWS_REGION')
         self._client = boto3.client('s3', region_name=self.region)
 
-    def upload_from_url(self, image_url: str, s3_key: str, max_retries=3) -> str | None:
+    def upload_from_url(self, image_url: str, s3_key: str, max_retries=3, target_size: tuple = None) -> str | None:
         """이미지 URL에서 다운로드 후 S3에 업로드. 성공 시 s3_key 반환, 실패 시 None."""
         if not image_url or not self.bucket:
             return None
@@ -37,7 +37,7 @@ class S3Uploader:
             logger.error(f"[S3 업로드 최종 실패] {max_retries}회 재시도 초과: {webp_s3_key}")
             return None
 
-        resized_content = self._resize(raw_content)
+        resized_content = self._resize(raw_content, target_size)
         if resized_content is None:
             return None
         
@@ -84,14 +84,14 @@ class S3Uploader:
             logger.error(f"우회 시도를 실패했습니다: {e}")
         return None
 
-    def _resize(self, content: bytes) -> bytes | None:
+    def _resize(self, content: bytes, target_size: tuple) -> bytes | None:
         """Pillow를 이용해 해상도를 350x525로 줄이고 WebP로 압축/변환."""
         try:
             img = Image.open(BytesIO(content))
             
-            max_size = (450, 675)
-            img.thumbnail(max_size)
-            
+            if target_size:
+                img.thumbnail(target_size)
+                
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
                 
