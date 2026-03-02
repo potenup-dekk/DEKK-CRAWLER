@@ -7,6 +7,13 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
 from playwright.sync_api import sync_playwright
 
+from core.config import (
+    BROWSER_USER_AGENT, CURL_IMPERSONATE,
+    GOODS_IMAGE_SIZE, GOODS_REQUEST_TIMEOUT,
+    PLAYWRIGHT_TIMEOUT_MS, PROCESS_SLEEP_RANGE,
+    SCROLL_SLEEP_RANGE, SNAP_IMAGE_SIZE, SNAP_REQUEST_TIMEOUT,
+    VIEWPORT_SIZE,
+)
 from core.logger import logger
 from core.s3_uploader import S3Uploader
 
@@ -42,15 +49,15 @@ class MusinsaCrawler(BaseCrawler):
                 ]
             )
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={'width': 1920, 'height': 1080},
+                user_agent=BROWSER_USER_AGENT,
+                viewport=VIEWPORT_SIZE,
             )
             page = context.new_page()
             page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             page.goto("https://www.musinsa.com/snap/main/recommend?gf=A&sort=NEWEST")
 
             try:
-                page.wait_for_selector("a[href*='/snap/']", timeout=10000)
+                page.wait_for_selector("a[href*='/snap/']", timeout=PLAYWRIGHT_TIMEOUT_MS)
             except Exception as e:
                 logger.error(f"페이지 로딩 또는 봇 차단 발생: {e}")
                 browser.close()
@@ -76,7 +83,7 @@ class MusinsaCrawler(BaseCrawler):
                     break
 
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(random.uniform(1.5, 3.0))
+                time.sleep(random.uniform(*SCROLL_SLEEP_RANGE))
 
             browser.close()
 
@@ -84,7 +91,7 @@ class MusinsaCrawler(BaseCrawler):
         return new_ids[::-1]
 
     def process_and_upload(self, snap_id):
-        time.sleep(random.uniform(1.5, 3.5))  # 방화벽 회피 - 꼭 유지
+        time.sleep(random.uniform(*PROCESS_SLEEP_RANGE))  # 방화벽 회피 - 꼭 유지
 
         response = self._fetch_snap_html(snap_id)
         raw_snap_data = self._parse_snap_data(snap_id, response)
@@ -98,7 +105,7 @@ class MusinsaCrawler(BaseCrawler):
     def _fetch_snap_html(self, snap_id):
         url = f"https://www.musinsa.com/snap/{snap_id}"
         try:
-            return curl_requests.get(url, impersonate="chrome110", timeout=15)
+            return curl_requests.get(url, impersonate=CURL_IMPERSONATE, timeout=SNAP_REQUEST_TIMEOUT)
         except Exception as e:
             logger.error(f"스냅 {snap_id} 네트워크 요청 실패: {e}")
             raise Exception("네트워크 에러")
@@ -133,7 +140,7 @@ class MusinsaCrawler(BaseCrawler):
         formatted_ids = ",".join([f"MUSINSA:{gn}" for gn in goods_nos])
         url = f"https://content.musinsa.com/api2/content/snap/v1/goods?goodsIds={formatted_ids}"
         try:
-            res = curl_requests.get(url, impersonate="chrome110", timeout=10).json()
+            res = curl_requests.get(url, impersonate=CURL_IMPERSONATE, timeout=GOODS_REQUEST_TIMEOUT).json()
             return res.get('data', {}).get('list', [])
         except Exception:
             return []
@@ -141,10 +148,20 @@ class MusinsaCrawler(BaseCrawler):
     def _upload_images_to_s3(self, snap_id: str, raw_snap_data: dict):
         for media in raw_snap_data.get('medias', []):
             if media.get('type') == 'IMAGE' and media.get('path'):
-                s3_key = f"musinsa/snaps/{snap_id}/{_get_filename(media['path'])}"
-                media['s3Key'] = self.s3.upload_from_url(media['path'], s3_key)
+                original_url = media['path']
+                s3_key = f"musinsa/snaps/{snap_id}/{_get_filename(original_url)}"
+                s3_url = self.s3.upload_from_url(original_url, s3_key, target_size=SNAP_IMAGE_SIZE)
+
+                media['originUrl'] = original_url
+                media['imageUrl'] = s3_url if s3_url else None
+                media['isUploaded'] = bool(s3_url)
 
         for goods in raw_snap_data.get('goods_detail_list', []):
             if goods.get('imageUrl'):
-                s3_key = f"musinsa/goods/{goods.get('goodsNo', 'unknown')}/{_get_filename(goods['imageUrl'])}"
-                goods['s3ImageKey'] = self.s3.upload_from_url(goods['imageUrl'], s3_key)
+                original_url = goods['imageUrl']
+                s3_key = f"musinsa/goods/{goods.get('goodsNo', 'unknown')}/{_get_filename(original_url)}"
+                s3_url = self.s3.upload_from_url(original_url, s3_key, target_size=GOODS_IMAGE_SIZE)
+
+                goods['originUrl'] = original_url
+                goods['imageUrl'] = s3_url if s3_url else None
+                goods['isUploaded'] = bool(s3_url)

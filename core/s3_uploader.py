@@ -1,11 +1,17 @@
 import os
 import time
+from io import BytesIO
 
 import boto3
 import botocore
 import requests
 from curl_cffi import requests as curl_requests
+from PIL import Image
 
+from core.config import (
+    CURL_IMPERSONATE, IMAGE_DOWNLOAD_MAX_RETRIES,
+    IMAGE_DOWNLOAD_TIMEOUT, RETRY_SLEEP, WEBP_QUALITY,
+)
 from core.logger import logger
 
 
@@ -15,24 +21,31 @@ class S3Uploader:
         self.region = os.getenv('AWS_REGION')
         self._client = boto3.client('s3', region_name=self.region)
 
-    def upload_from_url(self, image_url: str, s3_key: str, max_retries=3) -> str | None:
+    def upload_from_url(self, image_url: str, s3_key: str, max_retries=IMAGE_DOWNLOAD_MAX_RETRIES, target_size: tuple = None) -> str | None:
         """이미지 URL에서 다운로드 후 S3에 업로드. 성공 시 s3_key 반환, 실패 시 None."""
         if not image_url or not self.bucket:
             return None
 
-        if self._exists(s3_key):
-            logger.warning(f"[S3 스킵] 이미 존재하는 파일입니다: {s3_key}")
-            return s3_key
+        base_key = s3_key.rsplit('.', 1)[0]
+        webp_s3_key = f"{base_key}.webp"
+        
+        if self._exists(webp_s3_key):
+            logger.warning(f"[S3 스킵] 이미 존재하는 파일입니다: {webp_s3_key}")
+            return webp_s3_key
 
         if image_url.startswith('//'):
             image_url = 'https:' + image_url
 
-        content = self._download(image_url, max_retries)
-        if content is None:
-            logger.error(f"[S3 업로드 최종 실패] {max_retries}회 재시도 초과: {s3_key}")
+        raw_content = self._download(image_url, max_retries)
+        if raw_content is None:
+            logger.error(f"[S3 업로드 최종 실패] {max_retries}회 재시도 초과: {webp_s3_key}")
             return None
 
-        return self._put(s3_key, content)
+        resized_content = self._resize(raw_content, target_size)
+        if resized_content is None:
+            return None
+        
+        return self._put(webp_s3_key, resized_content)
 
     def _exists(self, s3_key: str) -> bool:
         """S3에 이미 존재하는 파일인지 확인."""
@@ -51,7 +64,7 @@ class S3Uploader:
         """curl_cffi로 이미지 다운로드. 실패 시 requests로 우회."""
         for attempt in range(1, max_retries + 1):
             try:
-                res = curl_requests.get(image_url, impersonate='chrome110', timeout=30)
+                res = curl_requests.get(image_url, impersonate=CURL_IMPERSONATE, timeout=IMAGE_DOWNLOAD_TIMEOUT)
                 if res.status_code == 200:
                     return res.content
                 logger.warning(f"[S3 다운로드 실패] 상태코드 {res.status_code}: {image_url}")
@@ -59,7 +72,7 @@ class S3Uploader:
             except Exception as e:
                 logger.warning(f"[S3 지연] {image_url} 다운로드 {attempt}차 실패: {e}")
                 if attempt < max_retries:
-                    time.sleep(2)
+                    time.sleep(RETRY_SLEEP)
 
         return self._download_fallback(image_url)
 
@@ -75,6 +88,25 @@ class S3Uploader:
             logger.error(f"우회 시도를 실패했습니다: {e}")
         return None
 
+    def _resize(self, content: bytes, target_size: tuple) -> bytes | None:
+        """Pillow를 이용해 해상도를 350x525로 줄이고 WebP로 압축/변환."""
+        try:
+            img = Image.open(BytesIO(content))
+            
+            if target_size:
+                img.thumbnail(target_size)
+                
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+                
+            output_buffer = BytesIO()
+            img.save(output_buffer, format="WEBP", quality=WEBP_QUALITY)
+            
+            return output_buffer.getvalue()
+        except Exception as e:
+            logger.error(f"[이미지 리사이징 에러]: {e}")
+            return None
+        
     def _put(self, s3_key: str, content: bytes) -> str | None:
         """S3에 파일 업로드."""
         try:
@@ -82,7 +114,7 @@ class S3Uploader:
                 Bucket=self.bucket,
                 Key=s3_key,
                 Body=content,
-                ContentType='image/jpeg',
+                ContentType='image/webp',
             )
             return s3_key
         except Exception as e:
