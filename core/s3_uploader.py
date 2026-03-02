@@ -8,6 +8,10 @@ import requests
 from curl_cffi import requests as curl_requests
 from PIL import Image
 
+from core.config import (
+    CURL_IMPERSONATE, IMAGE_DOWNLOAD_MAX_RETRIES,
+    IMAGE_DOWNLOAD_TIMEOUT, RETRY_SLEEP, WEBP_QUALITY,
+)
 from core.logger import logger
 
 
@@ -17,7 +21,7 @@ class S3Uploader:
         self.region = os.getenv('AWS_REGION')
         self._client = boto3.client('s3', region_name=self.region)
 
-    def upload_from_url(self, image_url: str, s3_key: str, max_retries=3, target_size: tuple = None) -> str | None:
+    def upload_from_url(self, image_url: str, s3_key: str, max_retries=IMAGE_DOWNLOAD_MAX_RETRIES, target_size: tuple = None) -> str | None:
         """이미지 URL에서 다운로드 후 S3에 업로드. 성공 시 s3_key 반환, 실패 시 None."""
         if not image_url or not self.bucket:
             return None
@@ -60,7 +64,7 @@ class S3Uploader:
         """curl_cffi로 이미지 다운로드. 실패 시 requests로 우회."""
         for attempt in range(1, max_retries + 1):
             try:
-                res = curl_requests.get(image_url, impersonate='chrome110', timeout=30)
+                res = curl_requests.get(image_url, impersonate=CURL_IMPERSONATE, timeout=IMAGE_DOWNLOAD_TIMEOUT)
                 if res.status_code == 200:
                     return res.content
                 logger.warning(f"[S3 다운로드 실패] 상태코드 {res.status_code}: {image_url}")
@@ -68,7 +72,7 @@ class S3Uploader:
             except Exception as e:
                 logger.warning(f"[S3 지연] {image_url} 다운로드 {attempt}차 실패: {e}")
                 if attempt < max_retries:
-                    time.sleep(2)
+                    time.sleep(RETRY_SLEEP)
 
         return self._download_fallback(image_url)
 
@@ -96,7 +100,7 @@ class S3Uploader:
                 img = img.convert("RGB")
                 
             output_buffer = BytesIO()
-            img.save(output_buffer, format="WEBP", quality=80)
+            img.save(output_buffer, format="WEBP", quality=WEBP_QUALITY)
             
             return output_buffer.getvalue()
         except Exception as e:
