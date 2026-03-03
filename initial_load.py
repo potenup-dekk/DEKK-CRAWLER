@@ -65,6 +65,8 @@ def seed_initial_data():
 
     total_count = len(batch_raw_data_list)
     
+    previous_last_id = state_manager.get_last_id(platform)
+
     if successful_snap_ids:
         latest_id = max(successful_snap_ids, key=int)
         state_manager.update_last_id(platform, latest_id)
@@ -90,7 +92,9 @@ def seed_initial_data():
 
     except Exception as network_err:
         logger.error(f"네트워크 전송 중 치명적 에러 발생: {network_err}", exc_info=True)
-        logger.warning(f"[{platform}] 크롤링은 완료되었으나 API 전송 실패. 다음 실행 시 새로운 스냅만 수집됩니다.")
+        state_manager.update_last_id(platform, previous_last_id)
+        logger.warning(f"[{platform}] API 전송 실패로 상태 롤백 완료: {previous_last_id}")
+        logger.warning(f"[{platform}] 다음 실행에서 동일 스냅을 다시 수집/전송합니다. (이미지 S3는 중복 업로드 스킵)")
         if batch_id:
             completed_at = datetime.now().isoformat()
             err_msg = scrape_error_msg or str(network_err)

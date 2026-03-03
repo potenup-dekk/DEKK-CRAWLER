@@ -36,8 +36,8 @@ def _deliver_in_chunks(delivery, batch_id: str, data: list, crawled_at: str):
 def process_crawler(crawler, delivery, state_manager, crawled_at: str):
     """단일 크롤러의 전체 파이프라인 실행 (스크래핑 → 전송 → 상태 갱신)"""
     platform = crawler.platform_name
-    last_id = state_manager.get_last_id(platform)
-    new_snap_ids = crawler.fetch_new_snaps(last_id)
+    previous_last_id = state_manager.get_last_id(platform)
+    new_snap_ids = crawler.fetch_new_snaps(previous_last_id)
 
     if not new_snap_ids:
         logger.info(f"[{platform}] 새로운 스냅이 없습니다.")
@@ -69,7 +69,9 @@ def process_crawler(crawler, delivery, state_manager, crawled_at: str):
 
     except Exception as e:
         logger.error(f"[{platform}] 전송 실패. 다음 크론에서 재시도합니다. 오류: {e}", exc_info=True)
-        logger.warning(f"[{platform}] 크롤링은 완료되었으나 API 전송 실패. 다음 실행 시 새로운 스냅만 수집됩니다.")
+        state_manager.update_last_id(platform, previous_last_id)
+        logger.warning(f"[{platform}] API 전송 실패로 상태 롤백 완료: {previous_last_id}")
+        logger.warning(f"[{platform}] 다음 실행에서 동일 스냅을 다시 수집/전송합니다. (이미지 S3는 중복 업로드 스킵)")
         if batch_id:
             completed_at = datetime.now().isoformat()
             delivery.complete_batch(batch_id, len(batch_raw_data_list), completed_at, error_message=str(e))

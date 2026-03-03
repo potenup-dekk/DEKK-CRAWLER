@@ -17,7 +17,10 @@ class StateManager:
         return self.state.get(platform)
 
     def update_last_id(self, platform, snap_id):
-        self.state[platform] = str(snap_id)
+        if snap_id is None:
+            self.state.pop(platform, None)
+        else:
+            self.state[platform] = str(snap_id)
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
         with open(self.filepath, 'w') as f:
             json.dump(self.state, f)
