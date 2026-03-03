@@ -2,26 +2,27 @@
 
 ## 데이터 파이프라인 아키텍처
 
-```
-크롤링 서버                                  DEKK 서버
-    │                                          │
-    │  1. 배치 생성                              │
-    │  POST /batches ──────────────────────────▶│
-    │                                          │  배치 생성 (COLLECTING)
-    │  ◀── { batchId: 42 } ───────────────────│
-    │                                          │
-    │  2. 원본 데이터 전송 (청크 반복)              │
-    │  POST /batches/42/raw-data ──────────────▶│
-    │  ◀── 200 OK ────────────────────────────│
-    │                                          │
-    │  POST /batches/42/raw-data ──────────────▶│
-    │  ◀── 200 OK ────────────────────────────│
-    │  ...                                     │
-    │                                          │
-    │  3. 수집 완료 통보                           │
-    │  POST /batches/42/complete ──────────────▶│
-    │                                          │  배치 상태 → COLLECTED
-    │  ◀── 200 OK ────────────────────────────│
+```mermaid
+sequenceDiagram
+    actor Crawler as 크롤링 서버
+    participant API as DEKK 서버
+
+    Crawler->>API: 1️⃣ POST /batches<br/>{platform: "MUSINSA"}
+    activate API
+    API-->>Crawler: {batchId: 42}<br/>(상태: COLLECTING)
+    deactivate API
+
+    loop 청크 단위 반복 전송 (20건씩)
+        Crawler->>API: 2️⃣ POST /batches/42/raw-data<br/>[snap1, snap2, ...]
+        activate API
+        API-->>Crawler: 200 OK
+        deactivate API
+    end
+
+    Crawler->>API: 3️⃣ POST /batches/42/complete<br/>{totalCount: 87, completedAt: "..."}
+    activate API
+    API-->>Crawler: 200 OK<br/>(상태: COLLECTED)
+    deactivate API
 ```
 
 ---
@@ -150,10 +151,11 @@ BATCH_API_URL=http://your-spring-boot-server/api
 DELIVERY_MODE=BATCH
 
 # AWS S3 (크롤링한 이미지 저장)
-# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY는 EC2/ECS IAM Role 사용 시 불필요
-# 로컬 테스트 시에만 직접 설정
 AWS_REGION=ap-northeast-2
 S3_BUCKET_NAME=your-bucket-name
+
+# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY는 EC2/ECS IAM Role 사용 시 불필요
+# 로컬 테스트 시에만 직접 설정
 ```
 
 ---
