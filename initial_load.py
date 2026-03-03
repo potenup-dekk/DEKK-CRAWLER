@@ -1,13 +1,16 @@
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 
 from dotenv import load_dotenv
-from datetime import datetime
-from core.config import STATE_FILE_PATH, CHUNK_SIZE, MAX_WORKERS, INITIAL_MAX_SCROLLS
-from core.state_manager import StateManager
-from core.logger import logger
-from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from core.backup_handler import backup_raw_data
+from core.config import (CHUNK_SIZE, INITIAL_MAX_SCROLLS, MAX_WORKERS,
+                         STATE_FILE_PATH)
 from core.delivery import get_delivery
+from core.logger import logger
+from core.state_manager import StateManager
 from crawlers.musinsa import MusinsaCrawler
 
 load_dotenv()
@@ -61,6 +64,9 @@ def seed_initial_data():
         return
 
     total_count = len(batch_raw_data_list)
+
+    backup_raw_data(batch_raw_data_list, platform, crawled_at)
+
     logger.info(f"수집 완료. 총 {total_count}개 서버 전송 시작...")
 
     batch_id = None

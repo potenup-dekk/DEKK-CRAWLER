@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
+from core.backup_handler import backup_raw_data
 from core.config import CHUNK_SIZE, MAX_WORKERS
 from core.logger import logger
 
@@ -47,6 +48,8 @@ def process_crawler(crawler, delivery, state_manager, crawled_at: str):
 
     if not batch_raw_data_list:
         return
+    
+    backup_raw_data(batch_raw_data_list, platform, crawled_at)
 
     logger.info(f"[{platform}] {len(batch_raw_data_list)}개 수집 완료. 전송 시작...")
 

@@ -1,3 +1,5 @@
+import gzip
+import json
 import os
 import time
 from io import BytesIO
@@ -8,10 +10,8 @@ import requests
 from curl_cffi import requests as curl_requests
 from PIL import Image
 
-from core.config import (
-    CURL_IMPERSONATE, IMAGE_DOWNLOAD_MAX_RETRIES,
-    IMAGE_DOWNLOAD_TIMEOUT, RETRY_SLEEP, WEBP_QUALITY,
-)
+from core.config import (CURL_IMPERSONATE, IMAGE_DOWNLOAD_MAX_RETRIES,
+                         IMAGE_DOWNLOAD_TIMEOUT, RETRY_SLEEP, WEBP_QUALITY)
 from core.logger import logger
 
 
@@ -46,6 +46,39 @@ class S3Uploader:
             return None
         
         return self._put(webp_s3_key, resized_content)
+
+    def upload_json_backup(self, data, s3_key: str, compress: bool = True) -> str | None:
+        """row_data 백업용 JSON을 S3에 업로드. 성공 시 s3_key 반환, 실패 시 None."""
+        if data is None or not s3_key or not self.bucket:
+            return None
+
+        try:
+            json_bytes = json.dumps(data, ensure_ascii=False).encode('utf-8')
+
+            final_key = s3_key
+            content = json_bytes
+            put_kwargs = {
+                'Bucket': self.bucket,
+                'Key': final_key,
+                'Body': content,
+                'ContentType': 'application/json',
+            }
+
+            if compress:
+                if not final_key.endswith('.gz'):
+                    final_key = f"{final_key}.gz"
+                content = gzip.compress(json_bytes)
+                put_kwargs.update({
+                    'Key': final_key,
+                    'Body': content,
+                    'ContentEncoding': 'gzip',
+                })
+
+            self._client.put_object(**put_kwargs)
+            return final_key
+        except Exception as e:
+            logger.error(f"[S3 JSON 백업 실패] {s3_key}: {e}")
+            return None
 
     def _exists(self, s3_key: str) -> bool:
         """S3에 이미 존재하는 파일인지 확인."""
