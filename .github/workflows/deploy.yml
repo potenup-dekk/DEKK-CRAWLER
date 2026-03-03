@@ -23,11 +23,11 @@ jobs:
           rsync -av --delete \
             --exclude 'logs/' \
             --exclude 'data/' \
-            ./ /home/ec2-user/crawler/
+            ./ /opt/crawler/
 
       - name: 3. 환경변수(.env) 파일 생성 (운영 경로에 생성)
         run: |
-          cat << EOF > /home/ec2-user/crawler/.env
+          cat << EOF > /opt/crawler/.env
           S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
           BATCH_API_URL=${{ secrets.BATCH_API_URL }}
           DELIVERY_MODE=${{ secrets.DELIVERY_MODE }}
@@ -36,7 +36,7 @@ jobs:
 
       - name: 4. Docker Compose 재빌드 및 재실행
         run: |
-          cd /home/ec2-user/crawler
+          cd /opt/crawler
           docker compose down
           docker compose build --no-cache
           docker compose up -d

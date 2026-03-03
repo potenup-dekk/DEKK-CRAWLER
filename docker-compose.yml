@@ -8,5 +8,5 @@ services:
     env_file:
       - .env
     volumes:
-      - /home/ec2-user/crawler/data:/app/data
-      - /home/ec2-user/crawler/logs:/app/logs
+      - /opt/crawler/data:/app/data
+      - /opt/crawler/logs:/app/logs
