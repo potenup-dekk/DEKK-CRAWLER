@@ -1,5 +1,6 @@
 import os
 import time
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
@@ -16,12 +17,22 @@ from crawlers.musinsa import MusinsaCrawler
 load_dotenv()
 
 def seed_initial_data():
+    logger.info("[초기로드] Playwright Chromium 설치 확인...")
+    try:
+        subprocess.run(["python", "-m", "playwright", "install", "chromium"], 
+                      check=True, capture_output=True, timeout=60)
+        logger.info("[초기로드] Playwright Chromium 설치 완료")
+    except Exception as e:
+        logger.error(f"[초기로드] Playwright 설치 실패: {e}")
+        raise
+    
     logger.info("[초기 세팅] 대규모 데이터 수집(병렬) 시작!")
     crawled_at = datetime.now().isoformat()
     crawler = MusinsaCrawler()
     delivery = get_delivery()
     
     state_manager = StateManager(STATE_FILE_PATH)
+
 
     platform = crawler.platform_name
 
@@ -102,3 +113,4 @@ def seed_initial_data():
 
 if __name__ == "__main__":
     seed_initial_data()
+    
