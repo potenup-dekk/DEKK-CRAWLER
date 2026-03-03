@@ -57,6 +57,8 @@ class MusinsaCrawler(BaseCrawler):
 
             try:
                 page.wait_for_selector("a[href*='/snap/']", timeout=PLAYWRIGHT_TIMEOUT_MS)
+                page.wait_for_load_state("networkidle")
+                time.sleep(0.5)
             except Exception as e:
                 logger.error(f"페이지 로딩 또는 봇 차단 발생: {e}")
                 browser.close()
@@ -87,7 +89,7 @@ class MusinsaCrawler(BaseCrawler):
             browser.close()
 
         logger.info(f"[{self.platform_name}] 스냅 탐색 완료: {len(new_ids)}개 발견")
-        return new_ids[::-1]
+        return sorted(new_ids, key=int, reverse=True)
 
     def process_and_upload(self, snap_id):
         time.sleep(random.uniform(*PROCESS_SLEEP_RANGE))  # 방화벽 회피 - 꼭 유지
