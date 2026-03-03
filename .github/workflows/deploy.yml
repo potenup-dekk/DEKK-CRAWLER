@@ -20,7 +20,10 @@ jobs:
       - name: 2. 운영 디렉터리 준비 및 코드 동기화
         run: |
           mkdir -p /home/ec2-user/crawler
-          rsync -av --delete ./ /home/ec2-user/crawler/
+          rsync -av --delete \
+            --exclude 'logs/' \
+            --exclude 'data/' \
+            ./ /home/ec2-user/crawler/
 
       - name: 3. 환경변수(.env) 파일 생성 (운영 경로에 생성)
         run: |
