@@ -19,7 +19,7 @@ jobs:
 
       - name: 2. 운영 디렉터리 준비 및 코드 동기화
         run: |
-          mkdir -p /home/ec2-user/crawler
+          mkdir -p /opt/crawler
           rsync -av --delete \
             --exclude 'logs/' \
             --exclude 'data/' \
