@@ -9,23 +9,34 @@ jobs:
   deploy:
     runs-on: self-hosted
 
+    concurrency:
+      group: crawler-deploy
+      cancel-in-progress: true
+
     steps:
       - name: 1. 최신 코드 가져오기 (Checkout)
         uses: actions/checkout@v4
 
-      - name: 2. 환경변수(.env) 파일 생성
+      - name: 2. 운영 디렉터리 준비 및 코드 동기화
         run: |
-          cat << EOF > .env
+          mkdir -p /home/ec2-user/crawler
+          rsync -av --delete ./ /home/ec2-user/crawler/
+
+      - name: 3. 환경변수(.env) 파일 생성 (운영 경로에 생성)
+        run: |
+          cat << EOF > /home/ec2-user/crawler/.env
           S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
           BATCH_API_URL=${{ secrets.BATCH_API_URL }}
           DELIVERY_MODE=${{ secrets.DELIVERY_MODE }}
           AWS_REGION=${{ secrets.AWS_REGION }}
           EOF
 
-      - name: 3. Docker Compose 빌드 및 무중단 재실행
+      - name: 4. Docker Compose 재빌드 및 재실행
         run: |
-          docker compose up --build -d
+          cd /home/ec2-user/crawler
+          docker compose down
+          docker compose build --no-cache
+          docker compose up -d
 
-      - name: 4. 사용하지 않는 도커 이미지 찌꺼기 청소 (용량 최적화)
-        run: |
-          docker image prune -f
+      - name: 5. 사용하지 않는 도커 이미지 정리
+        run: docker image prune -f
