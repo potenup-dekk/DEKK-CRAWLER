@@ -1,0 +1,30 @@
+name: Deploy Crawler to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: 1. 최신 코드 가져오기 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 2. 환경변수(.env) 파일 생성
+        run: |
+          cat << EOF > .env
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          BATCH_API_URL=${{secrets.BATCH_API_URL}}
+          DELIVERY_MODE=${{secrets.DELIVERY_MODE}}
+          EOF
+
+      - name: 3. Docker Compose 빌드 및 무중단 재실행
+        run: |
+          docker compose up --build -d
+
+      - name: 4. 사용하지 않는 도커 이미지 찌꺼기 청소 (용량 최적화)
+        run: |
+          docker image prune -f
