@@ -1,19 +1,18 @@
 import json
 import random
 import time
+from copy import deepcopy
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
 from playwright.sync_api import sync_playwright
 
-from core.config import (
-    BROWSER_USER_AGENT, CURL_IMPERSONATE,
-    GOODS_IMAGE_SIZE, GOODS_REQUEST_TIMEOUT,
-    PLAYWRIGHT_TIMEOUT_MS, PROCESS_SLEEP_RANGE,
-    SCROLL_SLEEP_RANGE, SNAP_IMAGE_SIZE, SNAP_REQUEST_TIMEOUT,
-    VIEWPORT_SIZE,
-)
+from core.config import (BROWSER_USER_AGENT, CURL_IMPERSONATE,
+                         GOODS_IMAGE_SIZE, GOODS_REQUEST_TIMEOUT,
+                         PLAYWRIGHT_TIMEOUT_MS, PROCESS_SLEEP_RANGE,
+                         SCROLL_SLEEP_RANGE, SNAP_IMAGE_SIZE,
+                         SNAP_REQUEST_TIMEOUT, VIEWPORT_SIZE)
 from core.logger import logger
 from core.s3_uploader import S3Uploader
 
@@ -58,6 +57,8 @@ class MusinsaCrawler(BaseCrawler):
 
             try:
                 page.wait_for_selector("a[href*='/snap/']", timeout=PLAYWRIGHT_TIMEOUT_MS)
+                page.wait_for_load_state("networkidle")
+                time.sleep(0.5)
             except Exception as e:
                 logger.error(f"페이지 로딩 또는 봇 차단 발생: {e}")
                 browser.close()
@@ -88,7 +89,7 @@ class MusinsaCrawler(BaseCrawler):
             browser.close()
 
         logger.info(f"[{self.platform_name}] 스냅 탐색 완료: {len(new_ids)}개 발견")
-        return new_ids[::-1]
+        return sorted(new_ids, key=int, reverse=True)
 
     def process_and_upload(self, snap_id):
         time.sleep(random.uniform(*PROCESS_SLEEP_RANGE))  # 방화벽 회피 - 꼭 유지
@@ -99,7 +100,12 @@ class MusinsaCrawler(BaseCrawler):
         goods_nos = [str(g.get('goodsNo')) for g in raw_snap_data.get('goods', []) if g.get('goodsNo')]
         raw_snap_data['goods_detail_list'] = self._fetch_goods_batch(goods_nos)
 
+        original_raw_data = deepcopy(raw_snap_data)
+        
         self._upload_images_to_s3(snap_id, raw_snap_data)
+        
+        raw_snap_data['_original_raw_data'] = original_raw_data
+        
         return raw_snap_data
 
     def _fetch_snap_html(self, snap_id):
