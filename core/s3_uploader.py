@@ -30,7 +30,7 @@ class S3Uploader:
         webp_s3_key = f"{base_key}.webp"
         
         if self._exists(webp_s3_key):
-            logger.warning(f"[S3 스킵] 이미 존재하는 파일입니다: {webp_s3_key}")
+            logger.debug(f"[S3 스킵] 이미 존재하는 파일입니다: {webp_s3_key}")
             return webp_s3_key
 
         if image_url.startswith('//'):
