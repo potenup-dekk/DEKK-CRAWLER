@@ -49,6 +49,10 @@ def process_crawler(crawler, delivery, state_manager, crawled_at: str):
     if not batch_raw_data_list:
         return
     
+    latest_id_to_update = new_snap_ids[0]
+    state_manager.update_last_id(platform, latest_id_to_update)
+    logger.info(f"[{platform}] 크롤링 완료. 상태 저장: {latest_id_to_update}")
+    
     backup_raw_data(batch_raw_data_list, platform, crawled_at)
 
     logger.info(f"[{platform}] {len(batch_raw_data_list)}개 수집 완료. 전송 시작...")
@@ -60,14 +64,12 @@ def process_crawler(crawler, delivery, state_manager, crawled_at: str):
 
         completed_at = datetime.now().isoformat()
         delivery.complete_batch(batch_id, len(batch_raw_data_list), completed_at)
-
-        # 병렬 처리 시 완료 순서가 섞이므로, 원본 리스트의 맨 마지막 ID(가장 최신)를 저장
-        latest_id_to_update = new_snap_ids[-1]
-        state_manager.update_last_id(platform, latest_id_to_update)
-        logger.info(f"[{platform}] 마지막 수집 ID 갱신 완료: {latest_id_to_update}")
+        
+        logger.info(f"[{platform}] API 전송 성공")
 
     except Exception as e:
         logger.error(f"[{platform}] 전송 실패. 다음 크론에서 재시도합니다. 오류: {e}", exc_info=True)
+        logger.warning(f"[{platform}] 크롤링은 완료되었으나 API 전송 실패. 다음 실행 시 새로운 스냅만 수집됩니다.")
         if batch_id:
             completed_at = datetime.now().isoformat()
             delivery.complete_batch(batch_id, len(batch_raw_data_list), completed_at, error_message=str(e))

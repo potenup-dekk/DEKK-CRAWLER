@@ -64,6 +64,11 @@ def seed_initial_data():
         return
 
     total_count = len(batch_raw_data_list)
+    
+    if successful_snap_ids:
+        latest_id = max(successful_snap_ids, key=int)
+        state_manager.update_last_id(platform, latest_id)
+        logger.info(f"[{platform}] 크롤링 완료. 상태 저장: {latest_id} (총 {total_count}개)")
 
     backup_raw_data(batch_raw_data_list, platform, crawled_at)
 
@@ -80,15 +85,12 @@ def seed_initial_data():
 
         completed_at = datetime.now().isoformat()
         delivery.complete_batch(batch_id, total_count, completed_at, error_message=scrape_error_msg)
-
-        # 성공한 스냅 중 가장 최신 ID를 상태로 저장 (숫자 기준 최댓값 = 가장 최신)
-        if successful_snap_ids:
-            latest_id = max(successful_snap_ids, key=int)
-            state_manager.update_last_id(platform, latest_id)
-            logger.info(f"[{platform}] 초기 세팅 완료. 마지막 수집 ID 저장: {latest_id}")
+        
+        logger.info(f"[{platform}] 초기 세팅 완료. API 전송 성공")
 
     except Exception as network_err:
         logger.error(f"네트워크 전송 중 치명적 에러 발생: {network_err}", exc_info=True)
+        logger.warning(f"[{platform}] 크롤링은 완료되었으나 API 전송 실패. 다음 실행 시 새로운 스냅만 수집됩니다.")
         if batch_id:
             completed_at = datetime.now().isoformat()
             err_msg = scrape_error_msg or str(network_err)
