@@ -8,5 +8,6 @@ services:
     env_file:
       - /opt/crawler/.env
     volumes:
+      - /opt/crawler/.env:/app/.env:ro
       - /opt/crawler/data:/app/data
       - /opt/crawler/logs:/app/logs

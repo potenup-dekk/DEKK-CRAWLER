@@ -3,12 +3,7 @@ set -e
 
 STATE_FILE="/app/data/crawler_state.json"
 REQUIRED_PLATFORM_KEYS="${REQUIRED_PLATFORM_KEYS:-MUSINSA}"
-ENV_FILE="/opt/crawler/.env"
-
-echo "[entrypoint] .env 로드..."
-if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | xargs)
-fi
+AWS_REGION="${AWS_REGION:-ap-northeast-2}"
 
 echo "[entrypoint] Playwright Chromium 점검..."
 python -m playwright install chromium
@@ -45,15 +40,12 @@ if [ "$NEED_INITIAL_LOAD" = "true" ]; then
     python /app/initial_load.py
 fi
 
-echo "[entrypoint] crontab 생성..."
+echo "[entrypoint] crontab 등록..."
+crontab /app/crontab
 
-cat <<EOF > /tmp/crontab_with_env
-*/10 * * * * . ${ENV_FILE} && cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2
-EOF
-
-cat /tmp/crontab_with_env
-
-crontab /tmp/crontab_with_env
+echo "[DEBUG] 등록된 crontab:"
+crontab -l
+echo "---"
 
 echo "[entrypoint] cron 시작..."
 cron -f
