@@ -42,8 +42,7 @@ else
 fi
 
 echo "[entrypoint] cron 환경변수 주입 중..."
-cat >> /tmp/crontab_with_env <<EOF
-# 환경변수 (Docker .env에서 로드)
+cat > /tmp/crontab_with_env <<EOF
 BATCH_API_URL=${BATCH_API_URL}
 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -51,6 +50,7 @@ AWS_S3_BUCKET=${AWS_S3_BUCKET}
 AWS_REGION=${AWS_REGION:-ap-northeast-2}
 REQUIRED_PLATFORM_KEYS=${REQUIRED_PLATFORM_KEYS}
 
+*/10 * * * * cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2
 EOF
 
 crontab /tmp/crontab_with_env
