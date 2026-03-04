@@ -15,8 +15,9 @@ RUN python -m playwright install chromium
 
 COPY . .
 
-RUN chmod 0644 crontab
-RUN crontab crontab
+# crontab은 entrypoint.sh에서 환경변수와 함께 동적 생성
+# RUN chmod 0644 crontab
+# RUN crontab crontab
 
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

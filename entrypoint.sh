@@ -41,4 +41,19 @@ else
     echo "[entrypoint] 필수 상태 키 확인됨 (${REQUIRED_PLATFORM_KEYS}). 바로 cron 시작."
 fi
 
+echo "[entrypoint] cron 환경변수 주입 중..."
+cat >> /tmp/crontab_with_env <<EOF
+# 환경변수 (Docker .env에서 로드)
+BATCH_API_URL=${BATCH_API_URL}
+AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+AWS_S3_BUCKET=${AWS_S3_BUCKET}
+AWS_REGION=${AWS_REGION:-ap-northeast-2}
+REQUIRED_PLATFORM_KEYS=${REQUIRED_PLATFORM_KEYS}
+
+EOF
+
+crontab /tmp/crontab_with_env
+echo "[entrypoint] crontab 등록 완료. cron 데몬 시작..."
+
 cron -f

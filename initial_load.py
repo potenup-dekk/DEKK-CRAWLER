@@ -4,8 +4,6 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
-from dotenv import load_dotenv
-
 from core.backup_handler import backup_raw_data
 from core.config import (CHUNK_SIZE, INITIAL_MAX_SCROLLS, MAX_WORKERS,
                          STATE_FILE_PATH)
@@ -13,8 +11,6 @@ from core.delivery import get_delivery
 from core.logger import logger
 from core.state_manager import StateManager
 from crawlers.musinsa import MusinsaCrawler
-
-load_dotenv()
 
 def seed_initial_data():
     logger.info("[초기로드] Playwright Chromium 설치 확인...")
