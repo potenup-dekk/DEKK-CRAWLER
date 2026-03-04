@@ -42,16 +42,25 @@ else
 fi
 
 echo "[entrypoint] cron 환경변수 주입 중..."
-cat > /tmp/crontab_with_env <<EOF
-BATCH_API_URL=${BATCH_API_URL}
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-AWS_S3_BUCKET=${AWS_S3_BUCKET}
-AWS_REGION=${AWS_REGION:-ap-northeast-2}
-REQUIRED_PLATFORM_KEYS=${REQUIRED_PLATFORM_KEYS}
 
-*/10 * * * * cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2
-EOF
+# 환경변수 출력 확인
+echo "[DEBUG] BATCH_API_URL=${BATCH_API_URL}"
+echo "[DEBUG] AWS_S3_BUCKET=${AWS_S3_BUCKET}"
+
+# crontab 파일 생성
+{
+  echo "BATCH_API_URL=${BATCH_API_URL}"
+  echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+  echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
+  echo "AWS_S3_BUCKET=${AWS_S3_BUCKET}"
+  echo "AWS_REGION=${AWS_REGION:-ap-northeast-2}"
+  echo ""
+  echo "*/10 * * * * cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2"
+} > /tmp/crontab_with_env
+
+echo "[entrypoint] 생성된 crontab 내용:"
+cat /tmp/crontab_with_env
+echo "---"
 
 crontab /tmp/crontab_with_env
 echo "[entrypoint] crontab 등록 완료. cron 데몬 시작..."
