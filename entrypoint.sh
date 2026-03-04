@@ -3,10 +3,17 @@ set -e
 
 STATE_FILE="/app/data/crawler_state.json"
 REQUIRED_PLATFORM_KEYS="${REQUIRED_PLATFORM_KEYS:-MUSINSA}"
+ENV_FILE="/opt/crawler/.env"
 
-echo "[entrypoint] Playwright Chromium 브라우저 점검..."
+echo "[entrypoint] .env 로드..."
+if [ -f "$ENV_FILE" ]; then
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
+
+echo "[entrypoint] Playwright Chromium 점검..."
 python -m playwright install chromium
 
+# 상태 체크
 CHECK_RESULT=$(python - <<PY
 import json
 import os
@@ -34,35 +41,19 @@ NEED_INITIAL_LOAD="${CHECK_RESULT%%|*}"
 MISSING_KEYS="${CHECK_RESULT#*|}"
 
 if [ "$NEED_INITIAL_LOAD" = "true" ]; then
-    echo "[entrypoint] 상태 키 없음/비정상: ${MISSING_KEYS}. 초기 대규모 수집을 시작합니다..."
+    echo "[entrypoint] 초기 수집 실행..."
     python /app/initial_load.py
-    echo "[entrypoint] 초기 수집 완료. cron 시작."
-else
-    echo "[entrypoint] 필수 상태 키 확인됨 (${REQUIRED_PLATFORM_KEYS}). 바로 cron 시작."
 fi
 
-echo "[entrypoint] cron 환경변수 주입 중..."
+echo "[entrypoint] crontab 생성..."
 
-# 환경변수 출력 확인
-echo "[DEBUG] BATCH_API_URL=${BATCH_API_URL}"
-echo "[DEBUG] AWS_S3_BUCKET=${AWS_S3_BUCKET}"
+cat <<EOF > /tmp/crontab_with_env
+*/10 * * * * . ${ENV_FILE} && cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2
+EOF
 
-# crontab 파일 생성
-{
-  echo "BATCH_API_URL=${BATCH_API_URL}"
-  echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
-  echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
-  echo "AWS_S3_BUCKET=${AWS_S3_BUCKET}"
-  echo "AWS_REGION=${AWS_REGION:-ap-northeast-2}"
-  echo ""
-  echo "*/10 * * * * cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2"
-} > /tmp/crontab_with_env
-
-echo "[entrypoint] 생성된 crontab 내용:"
 cat /tmp/crontab_with_env
-echo "---"
 
 crontab /tmp/crontab_with_env
-echo "[entrypoint] crontab 등록 완료. cron 데몬 시작..."
 
+echo "[entrypoint] cron 시작..."
 cron -f
