@@ -1,2 +1,2 @@
-# 10분마다 실행 (환경변수는 /app/.env에서 로드)
-*/10 * * * * . /app/.env && cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2
+# 10분마다 실행
+*/10 * * * * cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2

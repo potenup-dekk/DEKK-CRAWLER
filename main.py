@@ -1,12 +1,17 @@
-from datetime import datetime
+import os
 import subprocess
+from datetime import datetime
+
+from dotenv import load_dotenv
 
 from core.config import STATE_FILE_PATH
-from core.state_manager import StateManager
 from core.delivery import get_delivery
-from core.pipeline import process_crawler
 from core.logger import logger
+from core.pipeline import process_crawler
+from core.state_manager import StateManager
 from crawlers.musinsa import MusinsaCrawler
+
+load_dotenv('/app/.env')
 
 def main():
     logger.info("[사전점검] Playwright Chromium 설치 확인...")
