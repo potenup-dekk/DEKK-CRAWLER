@@ -1,0 +1,77 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+
+from core.backup_handler import backup_raw_data
+from core.config import CHUNK_SIZE, MAX_WORKERS
+from core.logger import logger
+
+
+def _scrape_parallel(crawler, snap_ids: list) -> list:
+    """스냅 ID 목록을 병렬로 스크래핑하여 원시 데이터 리스트 반환"""
+    platform = crawler.platform_name
+    results = []
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_snap = {executor.submit(crawler.process_and_upload, snap_id): snap_id for snap_id in snap_ids}
+
+        for future in as_completed(future_to_snap):
+            snap_id = future_to_snap[future]
+            try:
+                raw_dict = future.result()
+                if raw_dict:
+                    results.append(raw_dict)
+            except Exception as e:
+                logger.error(f"[{platform}] 스냅({snap_id}) 처리 에러: {e}", exc_info=True)
+
+    return results
+
+
+def _deliver_in_chunks(delivery, batch_id: str, data: list, crawled_at: str):
+    """수집 데이터를 청크 단위로 서버에 전송"""
+    for i in range(0, len(data), CHUNK_SIZE):
+        chunk = data[i:i + CHUNK_SIZE]
+        delivery.send_raw_data(batch_id, chunk, crawled_at)
+
+
+def process_crawler(crawler, delivery, state_manager, crawled_at: str):
+    """단일 크롤러의 전체 파이프라인 실행 (스크래핑 → 전송 → 상태 갱신)"""
+    platform = crawler.platform_name
+    previous_last_id = state_manager.get_last_id(platform)
+    new_snap_ids = crawler.fetch_new_snaps(previous_last_id)
+
+    if not new_snap_ids:
+        logger.info(f"[{platform}] 새로운 스냅이 없습니다.")
+        return
+
+    logger.info(f"[{platform}] 총 {len(new_snap_ids)}개의 신규 스냅 처리 (병렬)")
+    batch_raw_data_list = _scrape_parallel(crawler, new_snap_ids)
+
+    if not batch_raw_data_list:
+        return
+    
+    latest_id_to_update = new_snap_ids[0]
+    state_manager.update_last_id(platform, latest_id_to_update)
+    logger.info(f"[{platform}] 크롤링 완료. 상태 저장: {latest_id_to_update}")
+    
+    backup_raw_data(batch_raw_data_list, platform, crawled_at)
+
+    logger.info(f"[{platform}] {len(batch_raw_data_list)}개 수집 완료. 전송 시작...")
+
+    batch_id = None
+    try:
+        batch_id = delivery.create_batch(platform)
+        _deliver_in_chunks(delivery, batch_id, batch_raw_data_list, crawled_at)
+
+        completed_at = datetime.now().isoformat()
+        delivery.complete_batch(batch_id, len(batch_raw_data_list), completed_at)
+        
+        logger.info(f"[{platform}] API 전송 성공")
+
+    except Exception as e:
+        logger.error(f"[{platform}] 전송 실패. 다음 크론에서 재시도합니다. 오류: {e}", exc_info=True)
+        state_manager.update_last_id(platform, previous_last_id)
+        logger.warning(f"[{platform}] API 전송 실패로 상태 롤백 완료: {previous_last_id}")
+        logger.warning(f"[{platform}] 다음 실행에서 동일 스냅을 다시 수집/전송합니다. (이미지 S3는 중복 업로드 스킵)")
+        if batch_id:
+            completed_at = datetime.now().isoformat()
+            delivery.complete_batch(batch_id, len(batch_raw_data_list), completed_at, error_message=str(e))

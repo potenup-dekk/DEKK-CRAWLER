@@ -1,0 +1,2 @@
+# 10분마다 실행
+*/10 * * * * cd /app && /usr/bin/python3 main.py >> /proc/1/fd/1 2>> /proc/1/fd/2

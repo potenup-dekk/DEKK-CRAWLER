@@ -1,1 +1,22 @@
+# 환경 설정
 .env
+
+# SSH 키 파일 (보안상 절대 커밋 금지)
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+
+# 런타임 데이터 (로그, 상태 파일)
+data
+logs
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+docs
