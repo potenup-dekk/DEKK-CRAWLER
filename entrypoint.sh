@@ -37,7 +37,7 @@ MISSING_KEYS="${CHECK_RESULT#*|}"
 
 if [ "$NEED_INITIAL_LOAD" = "true" ]; then
     echo "[entrypoint] 초기 수집 실행..."
-    python /app/initial_load.py
+    python /app/batch/initial_load.py
 fi
 
 echo "[entrypoint] crontab 등록..."
