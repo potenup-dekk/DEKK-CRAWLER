@@ -1,12 +1,13 @@
-from typing import Optional, Literal
+from typing import Literal, Optional
+
 from pydantic import BaseModel
 
 
 class ExtractionResult(BaseModel):
     url: str
-    title: Optional[str] = None
-    brand: Optional[str] = None
-    image_url: Optional[str] = None
+    productName: Optional[str] = None
+    brandName: Optional[str] = None
+    imageUrl: Optional[str] = None
     extracted_via: Optional[Literal["static", "playwright", "error"]] = None
 
 
