@@ -2,10 +2,9 @@
 BatchDelivery retry 로직 단위 테스트
 
 검증 항목:
-    1. 첫 시도에 성공하면 retry 없이 반환
-    2. N회 실패 후 성공하면 정상 반환
-    3. 3회 모두 실패하면 예외 전파
-    4. 각 메서드(create_batch, send_raw_data, complete_batch) 독립 검증
+    create_batch  — 재시도 없음 (fail-fast), batchId None 시 ValueError
+    send_raw_data — 5xx/네트워크 오류만 재시도, 4xx는 즉시 실패, 최종 실패 시 ERROR 로그
+    complete_batch — 재시도 없음 (fail-fast)
 
 실행:
     python -m pytest test/test_batch_delivery_retry.py -v
@@ -29,10 +28,11 @@ _mock_logger_module.logger = logging.getLogger("test")
 sys.modules.setdefault("core.logger", _mock_logger_module)
 
 
-def _make_response(status_code: int, json_data: dict = None) -> MagicMock:
+def _make_response(status_code: int, json_data: dict = None, text: str = "") -> MagicMock:
     res = MagicMock()
     res.status_code = status_code
     res.json.return_value = json_data or {}
+    res.text = text
     if status_code >= 400:
         from requests import HTTPError
         res.raise_for_status.side_effect = HTTPError(response=res)
@@ -43,7 +43,6 @@ def _make_response(status_code: int, json_data: dict = None) -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def patch_sleep():
-    """tenacity의 대기 시간을 0으로 만들어 테스트 속도 보장"""
     with patch("time.sleep"):
         yield
 
@@ -55,47 +54,49 @@ def delivery():
         return BatchDelivery()
 
 
-# ── create_batch ──────────────────────────────────────────────────
+# ── create_batch — fail-fast (재시도 없음) ────────────────────────
 
 class TestCreateBatch:
-    def test_success_on_first_attempt(self, delivery):
-        ok_res = _make_response(200, {"data": {"batchId": 42}})
+    def test_success_returns_batch_id(self, delivery):
+        ok = _make_response(200, {"data": {"batchId": 42}})
 
-        with patch("requests.post", return_value=ok_res) as mock_post:
+        with patch("requests.post", return_value=ok) as mock_post:
             result = delivery.create_batch("MUSINSA")
 
         assert result == 42
         assert mock_post.call_count == 1
 
-    def test_retry_twice_then_succeed(self, delivery):
-        fail = _make_response(500)
-        ok = _make_response(200, {"data": {"batchId": 7}})
-
-        with patch("requests.post", side_effect=[fail, fail, ok]) as mock_post:
-            result = delivery.create_batch("MUSINSA")
-
-        assert result == 7
-        assert mock_post.call_count == 3
-
-    def test_raises_after_max_attempts(self, delivery):
+    def test_fails_immediately_on_server_error(self, delivery):
+        """5xx여도 재시도 없이 즉시 실패해야 한다 (고아 배치 방지)."""
         from requests import HTTPError
         fail = _make_response(500)
 
-        with patch("requests.post", return_value=fail):
+        with patch("requests.post", return_value=fail) as mock_post:
             with pytest.raises(HTTPError):
                 delivery.create_batch("MUSINSA")
 
-    def test_call_count_equals_max_attempts_on_failure(self, delivery):
-        fail = _make_response(500)
+        assert mock_post.call_count == 1
 
-        with patch("requests.post", return_value=fail) as mock_post:
-            with pytest.raises(Exception):
+    def test_raises_value_error_when_batch_id_missing(self, delivery):
+        """200이지만 batchId 없으면 ValueError."""
+        ok = _make_response(200, {"data": {}}, text='{"data":{}}')
+
+        with patch("requests.post", return_value=ok):
+            with pytest.raises(ValueError, match="batchId 없음"):
                 delivery.create_batch("MUSINSA")
 
-        assert mock_post.call_count == 3
+    def test_fails_immediately_on_4xx(self, delivery):
+        from requests import HTTPError
+        fail = _make_response(400)
+
+        with patch("requests.post", return_value=fail) as mock_post:
+            with pytest.raises(HTTPError):
+                delivery.create_batch("MUSINSA")
+
+        assert mock_post.call_count == 1
 
 
-# ── send_raw_data ─────────────────────────────────────────────────
+# ── send_raw_data — 5xx/네트워크만 재시도 ────────────────────────
 
 class TestSendRawData:
     def test_success_on_first_attempt(self, delivery):
@@ -106,8 +107,8 @@ class TestSendRawData:
 
         assert mock_post.call_count == 1
 
-    def test_retry_once_then_succeed(self, delivery):
-        fail = _make_response(503)
+    def test_retries_on_5xx_then_succeeds(self, delivery):
+        fail = _make_response(500)
         ok = _make_response(200)
 
         with patch("requests.post", side_effect=[fail, ok]) as mock_post:
@@ -115,13 +116,46 @@ class TestSendRawData:
 
         assert mock_post.call_count == 2
 
-    def test_raises_after_max_attempts(self, delivery):
-        from requests import HTTPError
-        fail = _make_response(503)
+    def test_retries_on_connection_error(self, delivery):
+        from requests import ConnectionError as ReqConnError
+        ok = _make_response(200)
 
-        with patch("requests.post", return_value=fail):
+        with patch("requests.post", side_effect=[ReqConnError(), ok]) as mock_post:
+            delivery.send_raw_data(1, [], "2024-01-01T00:00:00")
+
+        assert mock_post.call_count == 2
+
+    def test_no_retry_on_4xx(self, delivery):
+        """4xx 클라이언트 오류는 재시도 없이 즉시 실패."""
+        from requests import HTTPError
+        fail = _make_response(422)
+
+        with patch("requests.post", return_value=fail) as mock_post:
             with pytest.raises(HTTPError):
                 delivery.send_raw_data(1, [], "2024-01-01T00:00:00")
+
+        assert mock_post.call_count == 1
+
+    def test_raises_after_max_attempts_on_5xx(self, delivery):
+        from requests import HTTPError
+        fail = _make_response(500)
+
+        with patch("requests.post", return_value=fail) as mock_post:
+            with pytest.raises(HTTPError):
+                delivery.send_raw_data(1, [], "2024-01-01T00:00:00")
+
+        assert mock_post.call_count == 3
+
+    def test_logs_error_on_final_failure(self, delivery):
+        """3회 모두 실패 시 ERROR 로그가 남아야 한다."""
+        fail = _make_response(500)
+
+        with patch("requests.post", return_value=fail):
+            with patch("logging.Logger.error") as mock_error:
+                with pytest.raises(Exception):
+                    delivery.send_raw_data(1, [], "2024-01-01T00:00:00")
+
+        assert mock_error.called
 
     def test_correct_url_called(self, delivery):
         ok = _make_response(200)
@@ -129,11 +163,10 @@ class TestSendRawData:
         with patch("requests.post", return_value=ok) as mock_post:
             delivery.send_raw_data(99, [], "2024-01-01T00:00:00")
 
-        called_url = mock_post.call_args[0][0]
-        assert called_url == "http://mock-api/batches/99/raw-data"
+        assert mock_post.call_args[0][0] == "http://mock-api/batches/99/raw-data"
 
 
-# ── complete_batch ────────────────────────────────────────────────
+# ── complete_batch — fail-fast (재시도 없음) ─────────────────────
 
 class TestCompleteBatch:
     def test_success_on_first_attempt(self, delivery):
@@ -144,22 +177,16 @@ class TestCompleteBatch:
 
         assert mock_post.call_count == 1
 
-    def test_retry_and_succeed(self, delivery):
-        fail = _make_response(500)
-        ok = _make_response(200)
-
-        with patch("requests.post", side_effect=[fail, ok]) as mock_post:
-            delivery.complete_batch(1, 100, "2024-01-01T00:00:00")
-
-        assert mock_post.call_count == 2
-
-    def test_raises_after_max_attempts(self, delivery):
+    def test_fails_immediately_on_server_error(self, delivery):
+        """5xx여도 재시도 없이 즉시 실패해야 한다 (중복 완료 신호 방지)."""
         from requests import HTTPError
         fail = _make_response(500)
 
-        with patch("requests.post", return_value=fail):
+        with patch("requests.post", return_value=fail) as mock_post:
             with pytest.raises(HTTPError):
                 delivery.complete_batch(1, 100, "2024-01-01T00:00:00")
+
+        assert mock_post.call_count == 1
 
     def test_error_message_payload(self, delivery):
         ok = _make_response(200)
