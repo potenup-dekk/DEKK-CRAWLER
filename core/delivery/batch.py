@@ -24,7 +24,7 @@ def _log_final_error(retry_state):
         retry_state.fn.__name__,
         retry_state.outcome.exception(),
     )
-    raise retry_state.outcome.exception()
+    retry_state.outcome.result()  # 원래 traceback 보존하며 re-raise
 
 
 _SEND_RETRY_KWARGS = dict(
